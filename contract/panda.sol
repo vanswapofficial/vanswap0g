@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-contract 0gMascot {
+contract ZerogMascot {
     // Basic token information
     string public constant name = "0G Mascot";
     string public constant symbol = "PANDA";
