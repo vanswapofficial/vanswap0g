@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract ZeroGBridge is ERC20, ReentrancyGuard, Ownable, Pausable {
-    uint256 public constant MAX_SUPPLY = 20_000_000 * 10**18;
+    uint256 public constant MAX_SUPPLY = 48_000_000 * 10**18;
     
     address public vanaBridge;
     mapping(bytes32 => bool) public usedProofs;
@@ -16,8 +16,10 @@ contract ZeroGBridge is ERC20, ReentrancyGuard, Ownable, Pausable {
     event BridgedToVana(address indexed user, uint256 amount, bytes32 proofHash);
     event BridgedFromVana(address indexed user, uint256 amount, bytes32 proofHash);
 
-    // ✅ TANPA PARAMETER - DEPLOYER OTOMATIS JADI OWNER
-    constructor() ERC20("Wrapped VANS", "wVANS") {}
+    // ✅ TAMBAHKAN PARAMETER UNTUK Ownable
+    constructor() ERC20("Wrapped VANS", "wVANS") Ownable(msg.sender) {
+        // ✅ msg.sender (deployer) jadi owner
+    }
 
     function bridgeToVana(uint256 amount) external nonReentrant whenNotPaused returns (bytes32) {
         require(amount > 0, "Invalid amount");
