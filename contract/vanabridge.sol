@@ -2,16 +2,17 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
-    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
     
-    // ✅ VANS TOKEN ADDRESS DI VANA (IMMUTABLE)
-    IERC20 public constant VANS_TOKEN = IERC20(0x82741ff5937933244eb562A4b396f8079F1de914);
+    // ✅ GUNAKAN IERC20Metadata UNTUK ACCESS name(), symbol(), decimals()
+    IERC20Metadata public constant VANS_TOKEN = IERC20Metadata(0x82741ff5937933244eb562A4b396f8079F1de914);
     
     address public zeroGBridge;
     uint256 public bridgeFee = 0.001 ether;
@@ -28,7 +29,8 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     event BridgedToZeroG(address indexed user, uint256 amount, bytes32 proofHash);
     event BridgedFromZeroG(address indexed user, uint256 amount, bytes32 proofHash);
 
-    constructor() {
+    // ✅ TAMBAHKAN CONSTRUCTOR DENGAN initialOwner
+    constructor(address initialOwner) Ownable(initialOwner) {
         // ✅ VERIFIKASI VANS TOKEN SAAT DEPLOY
         require(verifyVANSToken(), "Invalid VANS token at deployment");
     }
@@ -67,7 +69,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     function bridgeToZeroG(uint256 amount) external payable nonReentrant whenNotPaused returns (bytes32) {
         require(amount >= minBridgeAmount && amount <= maxBridgeAmount, "Invalid amount");
         require(msg.value >= bridgeFee, "Insufficient fee");
-        require(verifyVANSToken(), "Invalid VANS token"); // ✅ VERIFIKASI TOKEN
+        require(verifyVANSToken(), "Invalid VANS token");
         
         // ✅ DAILY LIMIT CHECK
         if (block.timestamp - lastBridgeTime[msg.sender] > 1 days) {
@@ -78,12 +80,11 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         userDailyBridge[msg.sender] += amount;
         lastBridgeTime[msg.sender] = block.timestamp;
         
-        // ✅ TRANSFER VANS ASLI (HARDCODED ADDRESS)
+        // ✅ TRANSFER VANS ASLI
         uint256 balanceBefore = VANS_TOKEN.balanceOf(address(this));
         VANS_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
         uint256 balanceAfter = VANS_TOKEN.balanceOf(address(this));
         
-        // ✅ ANTI-FAKE TOKEN: VERIFY BALANCE INCREASE
         require(balanceAfter - balanceBefore == amount, "Token transfer verification failed");
         
         totalLocked += amount;
@@ -114,17 +115,14 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         require(msg.sender == zeroGBridge, "Only 0G bridge");
         require(!usedProofs[burnProof], "Proof already used");
         require(amount <= totalLocked, "Insufficient liquidity");
-        require(verifyVANSToken(), "Invalid VANS token"); // ✅ VERIFIKASI TOKEN
+        require(verifyVANSToken(), "Invalid VANS token");
         
-        // ✅ SIGNATURE VERIFICATION
         require(verifySignature(burnProof, amount, recipient, signature), "Invalid signature");
         
         usedProofs[burnProof] = true;
         totalLocked -= amount;
         
-        // ✅ TRANSFER VANS ASLI KE RECIPIENT
         VANS_TOKEN.safeTransfer(recipient, amount);
-        
         emit BridgedFromZeroG(recipient, amount, burnProof);
     }
 
@@ -189,7 +187,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         _unpause();
     }
 
-    // ✅ EMERGENCY WITHDRAW (ONLY VANS TOKEN, ONLY WHEN PAUSED)
+    // ✅ EMERGENCY WITHDRAW
     function emergencyWithdrawVANS(uint256 amount) external onlyOwner {
         require(paused(), "Only when paused");
         require(amount <= VANS_TOKEN.balanceOf(address(this)), "Insufficient balance");
@@ -228,43 +226,6 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
             VANS_TOKEN.decimals(),
             VANS_TOKEN.totalSupply()
         );
-    }
-
-    // ✅ TOKEN VERIFICATION STATUS
-    function getTokenVerification() external view returns (
-        bool nameValid,
-        bool symbolValid,
-        bool decimalsValid,
-        bool fullyVerified
-    ) {
-        string memory name;
-        string memory symbol;
-        uint8 decimals;
-        
-        try VANS_TOKEN.name() returns (string memory _name) {
-            name = _name;
-            nameValid = (keccak256(bytes(name)) == keccak256(bytes("vanaswap token")));
-        } catch {
-            nameValid = false;
-        }
-        
-        try VANS_TOKEN.symbol() returns (string memory _symbol) {
-            symbol = _symbol;
-            symbolValid = (keccak256(bytes(symbol)) == keccak256(bytes("VANS")));
-        } catch {
-            symbolValid = false;
-        }
-        
-        try VANS_TOKEN.decimals() returns (uint8 _decimals) {
-            decimals = _decimals;
-            decimalsValid = (decimals == 18);
-        } catch {
-            decimalsValid = false;
-        }
-        
-        fullyVerified = (nameValid && symbolValid && decimalsValid);
-        
-        return (nameValid, symbolValid, decimalsValid, fullyVerified);
     }
 
     receive() external payable {}
