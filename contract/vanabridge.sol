@@ -24,8 +24,8 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     event BridgedToZeroG(address indexed user, uint256 amount, bytes32 proofHash);
     event BridgedFromZeroG(address indexed user, uint256 amount, bytes32 proofHash);
 
-    // ✅ TANPA PARAMETER - DEPLOYER OTOMATIS JADI OWNER
-    constructor() {
+    // ✅ TAMBAHKAN Ownable(msg.sender) SEPERTI DI ZeroGBridge
+    constructor() Ownable(msg.sender) {
         require(verifyVANSToken(), "Invalid VANS token at deployment");
     }
 
@@ -80,7 +80,6 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         emit BridgedFromZeroG(recipient, amount, burnProof);
     }
 
-    // ✅ ADMIN FUNCTIONS - HANYA OWNER (DEPLOYER)
     function setZeroGBridge(address _zeroGBridge) external onlyOwner {
         require(zeroGBridge == address(0), "Bridge already set");
         zeroGBridge = _zeroGBridge;
