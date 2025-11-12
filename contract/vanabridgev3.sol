@@ -6,11 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
-    using ECDSA for bytes32;
 
     IERC20 public constant VANS_TOKEN = IERC20(0x82741ff5937933244eb562A4b396f8079F1de914);
     
@@ -64,7 +62,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         require(!usedProofs[zerogProof], "Proof already used");
         require(amount <= totalLocked, "Insufficient liquidity");
         
-        // ✅ VERIFY: Signature untuk 0G proof
+        // ✅ MANUAL SIGNATURE VERIFICATION (Untuk OZ v4)
         bytes32 messageHash = keccak256(abi.encodePacked(
             zerogProof, 
             amount, 
@@ -73,9 +71,11 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
             "ZEROG_TO_VANA"
         ));
         
-        bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
-        address recoveredSigner = ethSignedMessageHash.recover(signature);
+        bytes32 ethSignedMessageHash = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
+        );
         
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, signature);
         require(recoveredSigner == verifier, "Invalid signature");
 
         usedProofs[zerogProof] = true;
@@ -83,6 +83,31 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         VANS_TOKEN.safeTransfer(recipient, amount);
 
         emit BridgedFromZeroG(recipient, amount, zerogProof);
+    }
+
+    // ✅ MANUAL SIGNATURE RECOVERY FUNCTION
+    function recoverSigner(bytes32 ethSignedMessageHash, bytes memory signature) 
+        internal pure returns (address) 
+    {
+        require(signature.length == 65, "Invalid signature length");
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+
+        if (v < 27) {
+            v += 27;
+        }
+
+        require(v == 27 || v == 28, "Invalid signature version");
+
+        return ecrecover(ethSignedMessageHash, v, r, s);
     }
 
     function setVerifier(address _verifier) external onlyOwner {
@@ -100,4 +125,6 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     function unpause() external onlyOwner {
         _unpause();
     }
+
+    receive() external payable {}
 }
