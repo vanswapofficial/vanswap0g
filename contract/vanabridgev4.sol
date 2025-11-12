@@ -22,8 +22,8 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     event BridgedFromZeroG(address indexed user, uint256 amount, bytes32 proofHash);
     event FeesWithdrawn(address indexed owner, uint256 amount);
 
-    // ✅ TANPA CONSTRUCTOR - Owner otomatis msg.sender
-    // constructor() Ownable(msg.sender) {}
+    // ✅ CONSTRUCTOR MINIMAL - HANYA INI YANG DIBUTUHKAN
+    constructor() Ownable(msg.sender) {}
 
     function bridgeToZeroG(uint256 amount) external payable nonReentrant whenNotPaused returns (bytes32) {
         require(amount >= 1 ether, "Minimum 1 VANS");
