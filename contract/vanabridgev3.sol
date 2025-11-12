@@ -62,7 +62,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         require(!usedProofs[zerogProof], "Proof already used");
         require(amount <= totalLocked, "Insufficient liquidity");
         
-        // ✅ MANUAL SIGNATURE VERIFICATION (Untuk OZ v4)
+        // ✅ FIXED: MANUAL SIGNATURE VERIFICATION
         bytes32 messageHash = keccak256(abi.encodePacked(
             zerogProof, 
             amount, 
@@ -71,10 +71,12 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
             "ZEROG_TO_VANA"
         ));
         
+        // ✅ FIXED: Manual Ethereum signed message hash
         bytes32 ethSignedMessageHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
         );
         
+        // ✅ FIXED: Manual signature recovery
         address recoveredSigner = recoverSigner(ethSignedMessageHash, signature);
         require(recoveredSigner == verifier, "Invalid signature");
 
@@ -85,7 +87,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         emit BridgedFromZeroG(recipient, amount, zerogProof);
     }
 
-    // ✅ MANUAL SIGNATURE RECOVERY FUNCTION
+    // ✅ FIXED: MANUAL SIGNATURE RECOVERY (Tanpa OZ v5)
     function recoverSigner(bytes32 ethSignedMessageHash, bytes memory signature) 
         internal pure returns (address) 
     {
@@ -95,19 +97,25 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         bytes32 s;
         uint8 v;
 
+        // Extract r, s, v from signature
         assembly {
-            r := mload(add(signature, 32))
-            s := mload(add(signature, 64))
-            v := byte(0, mload(add(signature, 96)))
+            r := mload(add(signature, 0x20))
+            s := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
         }
 
+        // Handle v values (27 or 28)
         if (v < 27) {
             v += 27;
         }
 
         require(v == 27 || v == 28, "Invalid signature version");
 
-        return ecrecover(ethSignedMessageHash, v, r, s);
+        // Recover signer address
+        address signer = ecrecover(ethSignedMessageHash, v, r, s);
+        require(signer != address(0), "Invalid signature");
+
+        return signer;
     }
 
     function setVerifier(address _verifier) external onlyOwner {
@@ -118,12 +126,24 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         bridgeFee = newFee;
     }
 
+    function setBridgeLimits(uint256 min, uint256 max) external onlyOwner {
+        require(min < max, "Invalid limits");
+        minBridgeAmount = min;
+        maxBridgeAmount = max;
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
 
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    function emergencyWithdrawVANS(uint256 amount) external onlyOwner {
+        require(paused(), "Only when paused");
+        VANS_TOKEN.safeTransfer(owner(), amount);
+        totalLocked -= amount;
     }
 
     receive() external payable {}
