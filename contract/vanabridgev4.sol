@@ -10,26 +10,25 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
 
+    // ✅ HARDCODE VANS TOKEN ADDRESS
     IERC20 public constant VANS_TOKEN = IERC20(0x82741ff5937933244eb562A4b396f8079F1de914);
     
     uint256 public bridgeFee = 0.001 ether;
     mapping(bytes32 => bool) public usedProofs;
     uint256 public totalLocked;
-    
-    // ✅ VARIABLE UNTUK FEE
     uint256 public totalFeesCollected;
 
     event BridgedToZeroG(address indexed user, uint256 amount, bytes32 proofHash);
     event BridgedFromZeroG(address indexed user, uint256 amount, bytes32 proofHash);
     event FeesWithdrawn(address indexed owner, uint256 amount);
 
-    constructor() Ownable(msg.sender) {}
+    // ✅ TANPA CONSTRUCTOR - Owner otomatis msg.sender
+    // constructor() Ownable(msg.sender) {}
 
     function bridgeToZeroG(uint256 amount) external payable nonReentrant whenNotPaused returns (bytes32) {
         require(amount >= 1 ether, "Minimum 1 VANS");
         require(msg.value >= bridgeFee, "Insufficient fee");
 
-        // ✅ COLLECT FEE
         totalFeesCollected += msg.value;
 
         // Lock VANS
@@ -44,7 +43,7 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
             "VANA_TO_0G"
         ));
 
-        require(!usedProofs[proofHash], "Proof collision");
+        require(!usedProofs[proofHash], "Proof already used");
         usedProofs[proofHash] = true;
 
         emit BridgedToZeroG(msg.sender, amount, proofHash);
@@ -67,21 +66,18 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         emit BridgedFromZeroG(recipient, amount, zerogProof);
     }
 
-    // ✅ FUNGSI WITHDRAW FEE
     function withdrawFees(uint256 amount) external onlyOwner {
         require(amount <= totalFeesCollected, "Insufficient fees");
         require(amount <= address(this).balance, "Insufficient contract balance");
         
         totalFeesCollected -= amount;
         
-        // Transfer fee ke owner
         (bool success, ) = owner().call{value: amount}("");
         require(success, "Transfer failed");
         
         emit FeesWithdrawn(owner(), amount);
     }
 
-    // ✅ WITHDRAW ALL FEES
     function withdrawAllFees() external onlyOwner {
         uint256 amount = totalFeesCollected;
         require(amount > 0, "No fees to withdraw");
@@ -94,7 +90,6 @@ contract VanaBridge is ReentrancyGuard, Ownable, Pausable {
         emit FeesWithdrawn(owner(), amount);
     }
 
-    // ✅ CEK BALANCE FEE
     function feeBalance() public view returns (uint256) {
         return totalFeesCollected;
     }
