@@ -4,10 +4,9 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title SimpleMultiSigWallet
- * @dev Kontrak multisig yang lebih sederhana - tambah owners dan set required setelah deploy
+ * @title LindurzMultiSigWallet
  */
-contract SimpleMultiSigWallet is ReentrancyGuard {
+contract LindurzMultiSigWallet is ReentrancyGuard {
     // Events
     event OwnerAdded(address indexed owner);
     event OwnerRemoved(address indexed owner);
