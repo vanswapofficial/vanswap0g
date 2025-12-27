@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 contract VanSwapRouter {
     address public factory = 0x82741ff5937933244eb562A4b396f8079F1de914;
-    address public WETH = 0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c;
+    address public WETH = 0x6969696969696969696969696969696969696969;
 
     modifier ensure(uint256 deadline) {
         require(deadline >= block.timestamp, 'VanSwap: EXPIRED');
