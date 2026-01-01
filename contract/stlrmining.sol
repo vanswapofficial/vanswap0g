@@ -24,7 +24,7 @@ abstract contract ReentrancyGuard {
     }
 }
 
-contract VanMiningStaking is ReentrancyGuard {
+contract StellarMining is ReentrancyGuard {
     IERC20 public stlrToken;
     address public owner;
 
