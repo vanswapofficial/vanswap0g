@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mining & Staking | VanSwap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --primary: #1a7f5e;
+      --primary-dark: #146c4d;
+      --accent: #31d0aa;
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.4);
+      --card-bg: #052017;
+      --bg-dark: #010a07;
+      --danger: #ff4d4f;
+      --success: #31d0aa;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Kanit',sans-serif;
+      background:var(--bg-dark);
+      color:var(--text);
+      min-height:100vh;
+    }
+    .header{
+      display:flex;justify-content:space-between;align-items:center;padding:16px 32px;
+      background:var(--primary-dark);
+    }
+    .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:24px;}
+    .connect-btn{
+      background:var(--accent);color:#000;border:none;padding:10px 20px;
+      border-radius:8px;font-weight:700;cursor:pointer;
+    }
+    
+    .container{max-width:1200px;margin:40px auto;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:32px;}
+    @media (max-width:768px){.container{grid-template-columns:1fr;}}
+
+    .card{background:var(--card-bg);border-radius:24px;padding:32px;border:1px solid rgba(255,255,255,0.05);}
+    .card h2{font-size:24px;margin-bottom:24px;}
+
+    /* Mining Section */
+    .mining-counter{
+      font-size:48px;font-family:'Courier New',monospace;color:var(--accent);
+      text-align:center;margin:32px 0;font-weight:700;
+    }
+    .stats-row{display:flex;justify-content:space-between;margin-bottom:12px;color:var(--muted);}
+    .stats-val{color:var(--text);font-weight:600;}
+    
+    .claim-btn{
+      width:100%;background:rgba(255,255,255,0.1);color:var(--text);border:none;
+      padding:16px;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;
+      margin-top:24px;
+    }
+    .claim-btn:hover{background:var(--primary-dark);}
+    .claim-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+    .withdraw-btn{
+      width:100%;background:var(--primary);border:none;padding:16px;
+      border-radius:12px;color:#fff;font-weight:700;font-size:18px;cursor:pointer;
+      margin-top:12px;
+    }
+    .withdraw-btn:disabled{background:#333; opacity:0.5; cursor:not-allowed;}
+
+    /* Staking Section */
+    .input-box{
+      background:rgba(255,255,255,0.05);border-radius:12px;padding:16px;
+      margin-bottom:24px;
+    }
+    .input-box input{
+      width:100%;background:transparent;border:none;color:var(--text);
+      font-size:20px;outline:none;
+    }
+    .duration-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;}
+    .duration-option{
+      background:rgba(255,255,255,0.05);border:1px solid transparent;
+      padding:16px;border-radius:12px;text-align:center;cursor:pointer;
+    }
+    .duration-option.selected{border-color:var(--accent);background:rgba(49,208,170,0.1);}
+    .apy-val{color:var(--accent);font-weight:800;display:block;font-size:18px;}
+    
+    .stake-btn{
+      width:100%;background:var(--primary);border:none;padding:16px;
+      border-radius:12px;color:#fff;font-weight:700;font-size:18px;cursor:pointer;
+    }
+    .stake-btn:hover{background:var(--primary-dark);}
+
+    .ref-section{margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);}
+    .ref-link-box{
+      background:#000;padding:12px;border-radius:8px;font-family:monospace;
+      display:flex;justify-content:space-between;align-items:center;margin-top:8px;
+    }
+    .ref-input-group { display:flex; gap:12px; margin-top:16px; }
+    .ref-input { flex:1; background:rgba(255,255,255,0.05); border:none; padding:12px; border-radius:8px; color:white; }
+    .ref-btn { background:var(--accent); color:black; border:none; padding:0 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+    .copy-icon{cursor:pointer;color:var(--accent);}
+
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">
+      <img src="https://vanswap.xyz/assets/vans.png" width="32" height="32">
+      VanSwap
+    </div>
+    <button class="connect-btn" id="connectBtn">Connect Wallet</button>
+  </div>
+
+  <div class="container">
+    <!-- Mining Card -->
+    <div class="card">
+      <h2>STLR Mining</h2>
+      <div style="text-align:center;color:var(--muted);font-size:14px; margin-bottom: 16px;">
+        Mine 0.0001 STLR/sec. +0.00005 per referral.
+      </div>
+      
+      <div style="color:var(--accent); font-size:14px; text-align:center;">Pending (Current Session)</div>
+      <div id="miningCounter" class="mining-counter">0.000000</div>
+      
+      <div class="stats-row">
+        <span>Mining Rate</span>
+        <span class="stats-val" id="miningRate">0.0000 STLR/s</span>
+      </div>
+      <div class="stats-row">
+        <span>Referrals</span>
+        <span class="stats-val" id="refCount">0 / 50</span>
+      </div>
+      <div class="stats-row">
+        <span>Session Status</span>
+        <span class="stats-val" id="timeUntilStop">Not Started</span>
+      </div>
+
+      <button class="claim-btn" id="claimBtn" disabled>START MINING</button>
+      
+      <div style="margin-top:32px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.1);">
+        <div class="stats-row">
+          <span>Withdrawable Balance</span>
+          <span class="stats-val" id="withdrawBalance">0.000000 STLR</span>
+        </div>
+        <button class="withdraw-btn" id="withdrawBtn" disabled>Withdraw to Wallet (Min 100)</button>
+      </div>
+
+      <div class="ref-section">
+        <h3>Referral Program</h3>
+        
+        <!-- Registration (Auto handled, but shown if needed) -->
+        <div id="linkSection" style="display:none;">
+          <p style="color:var(--muted);font-size:13px;margin:8px 0;">Share your link to boost mining speed.</p>
+          <div class="ref-link-box">
+            <span id="refLink">Loading...</span>
+            <span class="copy-icon" onclick="copyRef()">📋</span>
+          </div>
+        </div>
+
+        <!-- Bind Referrer -->
+        <div id="bindSection" style="margin-top:24px; border-top:1px solid rgba(255,255,255,0.05); padding-top:16px;">
+          <p style="color:var(--muted);font-size:13px;margin:8px 0;">Referrer Code (Get 10 STLR Bonus)</p>
+          <div class="ref-input-group">
+            <input type="text" id="refCodeInput" class="ref-input" placeholder="Inviter code">
+            <button class="ref-btn" id="bindBtn">Set Referrer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staking Card -->
+    <div class="card">
+      <h2>STLR Staking</h2>
+      <div style="margin-bottom:12px;color:var(--muted);">Stake Amount (Min 10 - Max 1000)</div>
+      <div class="input-box">
+        <input type="number" id="stakeAmount" placeholder="0.0">
+      </div>
+
+      <div style="margin-bottom:12px;color:var(--muted);">Select Lock Period</div>
+      <div class="duration-grid">
+        <div class="duration-option" onclick="selectDuration(1, 85, this)">
+          1 Month
+          <span class="apy-val">85% APY</span>
+        </div>
+        <div class="duration-option" onclick="selectDuration(3, 150, this)">
+          3 Months
+          <span class="apy-val">150% APY</span>
+        </div>
+        <div class="duration-option" onclick="selectDuration(6, 250, this)">
+          6 Months
+          <span class="apy-val">250% APY</span>
+        </div>
+        <div class="duration-option" onclick="selectDuration(12, 600, this)">
+          12 Months
+          <span class="apy-val">600% APY</span>
+        </div>
+      </div>
+      
+      <div style="margin-bottom:24px;text-align:center;color:var(--accent);font-weight:600;" id="estReward">
+        Estimated Reward: 0.00 STLR
+      </div>
+
+      <button class="stake-btn" id="stakeBtn">Stake STLR</button>
+
+      <div style="margin-top:32px;">
+        <h3>My Stakes</h3>
+        <div id="stakesList" style="margin-top:16px;color:var(--muted);text-align:center;">
+          <!-- Mock Item -->
+          No active stakes
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.1/ethers.umd.min.js"></script>
+  <script>
+    // Config
+    const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000"; 
+    const ABI = [
+        "function autoRegister() external",
+        "function setReferrer(string memory code) external",
+        "function claimMiningRewards() external",
+        "function withdrawMining(uint256 amount) external",
+        "function stake(uint256 amount, uint256 durationOption) external",
+        "function miners(address) view returns (uint256 lastClaimTime, uint256 referralCount, address referrer, uint256 balance)",
+        "function userToReferralCode(address) view returns (string memory)"
+    ];
+    const BASE_RATE = 0.0001;
+    const REF_BOOST = 0.00005;
+    const MAX_SESSION = 6 * 3600; // 6 hours in seconds
+    
+    let state = {
+      miningBalance: 0.0,
+      startTime: Date.now(),
+      referrals: 0,
+      isConnected: false,
+      selectedDuration: 0,
+      selectedApy: 0,
+      myCode: null,
+      lastClaimTime: 0,
+      withdrawableBalance: 0.0,
+      provider: null,
+      contract: null
+    };
+
+    // UI Updates Loop
+    function updateMiningCounter() {
+      if(!state.isConnected) return;
+      
+      try {
+        const now = Date.now() / 1000; // seconds
+        
+        const rate = BASE_RATE + (state.referrals * REF_BOOST);
+        document.getElementById('miningRate').textContent = rate.toFixed(5) + " STLR/s";
+        document.getElementById('refCount').textContent = state.referrals + " / 50";
+
+        let elapsed = 0;
+        let btn = document.getElementById('claimBtn');
+        
+        if (state.lastClaimTime === 0) {
+          // Not started
+          document.getElementById('miningCounter').textContent = "0.000000";
+          document.getElementById('timeUntilStop').textContent = "Not Started";
+          btn.textContent = "START MINING";
+          btn.disabled = false;
+          btn.style.opacity = "1";
+          
+        } else {
+          elapsed = now - state.lastClaimTime;
+          const sessionActive = elapsed < MAX_SESSION;
+          const cappedElapsed = Math.min(elapsed, MAX_SESSION);
+          const currentPending = cappedElapsed * rate;
+          
+          document.getElementById('miningCounter').textContent = currentPending.toFixed(6);
+          
+          if (sessionActive) {
+            const timeLeft = MAX_SESSION - elapsed;
+            const h = Math.floor(timeLeft/3600);
+            const m = Math.floor((timeLeft%3600)/60);
+            const s = Math.floor(timeLeft%60);
+            
+            document.getElementById('timeUntilStop').textContent = `Ends in ${h}h ${m}m ${s}s`;
+            btn.textContent = `MINING... (${h}:${m}:${s})`;
+            btn.disabled = true; // Wait for 6h
+            btn.style.opacity = "0.6";
+          } else {
+            document.getElementById('timeUntilStop').textContent = "Session Finished";
+            btn.textContent = "CLAIM";
+            btn.disabled = false;
+            btn.style.opacity = "1";
+          }
+        }
+
+        // Withdrawable Balance
+        document.getElementById('withdrawBalance').textContent = state.withdrawableBalance.toFixed(6) + " STLR";
+        const wBtn = document.getElementById('withdrawBtn');
+        if (state.withdrawableBalance >= 100) {
+          wBtn.disabled = false;
+          wBtn.textContent = "Withdraw to Wallet";
+        } else {
+          wBtn.disabled = true;
+          wBtn.textContent = `Min 100 (${(100 - state.withdrawableBalance).toFixed(1)} left)`;
+        }
+      } catch(e) {
+        console.error("UI Update Error:", e);
+      }
+
+      requestAnimationFrame(updateMiningCounter);
+    }
+
+    function selectDuration(months, apy, el) {
+      document.querySelectorAll('.duration-option').forEach(d => d.classList.remove('selected'));
+      el.classList.add('selected');
+      state.selectedDuration = months;
+      state.selectedApy = apy;
+      updateEstReward();
+    }
+    
+    function updateEstReward() {
+      const amt = parseFloat(document.getElementById('stakeAmount').value || 0);
+      if (amt > 0 && state.selectedDuration > 0) {
+        // APY% / 100 * amt * (months/12)
+        const reward = (state.selectedApy / 100) * amt * (state.selectedDuration / 12);
+        document.getElementById('estReward').textContent = `Estimated Reward: ${reward.toFixed(2)} STLR`;
+      } else {
+        document.getElementById('estReward').textContent = `Estimated Reward: 0.00 STLR`;
+      }
+    }
+    
+    document.getElementById('stakeAmount').addEventListener('input', updateEstReward);
+
+    async function checkEOA(address) {
+      const code = await state.provider.getCode(address);
+      if (code !== '0x') {
+        alert("Smart contracts are not allowed to participate.");
+        throw new Error("Bot detected");
+      }
+    }
+
+    // Persist Mock State
+    function saveState() {
+        if(!state.provider) return; // Only save if connected logic started
+        localStorage.setItem('van_mining_state_' + window.ethereum.selectedAddress, JSON.stringify({
+            lastClaimTime: state.lastClaimTime,
+            myCode: state.myCode,
+            withdrawableBalance: state.withdrawableBalance,
+            referrals: state.referrals
+        }));
+    }
+
+    function loadState(addr) {
+        const saved = localStorage.getItem('van_mining_state_' + addr);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            state.lastClaimTime = parsed.lastClaimTime || 0;
+            state.myCode = parsed.myCode || null;
+            state.withdrawableBalance = parsed.withdrawableBalance || 0.0;
+            state.referrals = parsed.referrals || 0;
+        }
+    }
+
+    async function connect() {
+      if(!window.ethereum) return alert("Install MetaMask");
+      
+      try {
+        state.provider = new ethers.providers.Web3Provider(window.ethereum);
+        await state.provider.send("eth_requestAccounts", []);
+        const signer = state.provider.getSigner();
+        const addr = await signer.getAddress();
+        
+        await checkEOA(addr);
+        document.getElementById('connectBtn').textContent = addr.substring(0,6) + "...";
+        state.contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        
+        // Load persisted state (Simulating Contract Read)
+        loadState(addr);
+        
+        // Auto Register Check
+        if (!state.myCode) {
+           state.myCode = "STLR" + Math.floor(Math.random() * 1000); // Mock unique code
+           saveState();
+        }
+        
+        // Show Referral Link
+        if (state.myCode) {
+          document.getElementById('linkSection').style.display = 'block';
+          // User requested: https://vanswap.xyz/stlrmining/(kode)
+          document.getElementById('refLink').textContent = `https://vanswap.xyz/stlrmining/${state.myCode}`;
+        }
+
+        // URL Parser for Invite Code
+        // Supports: /stlrmining/CODE  OR  ?ref=CODE
+        let inviteCode = "";
+        const path = window.location.pathname;
+        const query = new URLSearchParams(window.location.search);
+        
+        if (query.get('ref')) {
+          inviteCode = query.get('ref');
+        } else if (path.includes('/stlrmining/')) {
+          const parts = path.split('/stlrmining/');
+          if (parts[1]) {
+             inviteCode = parts[1].split('/')[0]; // simple parsing
+             // Strip trailing slash if present
+             inviteCode = inviteCode.replace(/\/$/, "");
+          }
+        }
+        
+        if (inviteCode && inviteCode !== state.myCode) {
+          document.getElementById('refCodeInput').value = inviteCode;
+        }
+
+        state.isConnected = true;
+        updateMiningCounter();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function copyRef() {
+      const text = document.getElementById('refLink').textContent;
+      navigator.clipboard.writeText(text);
+      alert("Link copied!");
+    }
+
+    // Contract Interactions
+    document.getElementById('connectBtn').onclick = connect;
+    
+    document.getElementById('bindBtn').onclick = async () => {
+      if(!state.isConnected) return alert("Connect Wallet");
+      const code = document.getElementById('refCodeInput').value;
+      if(!code) return alert("Enter referrer code");
+      try {
+        // await state.contract.setReferrer(code);
+        alert("Referrer set! You received 10 STLR Bonus.");
+        document.getElementById('bindBtn').disabled = true;
+        document.getElementById('bindBtn').textContent = "Linked";
+      } catch(e) { console.error(e); alert("Failed: " + e.message); }
+    };
+
+    document.getElementById('stakeBtn').onclick = async () => {
+      if(!state.isConnected) return alert("Connect Wallet");
+      const amt = document.getElementById('stakeAmount').value;
+      if(!amt || amt < 10 || amt > 1000) return alert("Amount must be 10-1000");
+      if(!state.selectedDuration) return alert("Select duration");
+      try {
+        const wei = ethers.utils.parseEther(amt);
+        // await state.contract.stake(wei, state.selectedDuration);
+        alert(`Staked ${amt} STLR!`);
+        
+        // Mock add to list
+        const list = document.getElementById('stakesList');
+        if (list.innerText.includes("No active")) list.innerHTML = "";
+        const row = document.createElement('div');
+        row.className = 'stats-row';
+        row.innerHTML = `<span>${amt} STLR (${state.selectedDuration}m)</span> <button class="ref-btn" style="font-size:12px;padding:4px 8px;">Wait</button>`;
+        list.appendChild(row);
+        
+      } catch(e) { console.error(e); alert("Staking failed: " + e.message); }
+    };
+
+    document.getElementById('claimBtn').onclick = async () => {
+       if(!state.isConnected) return;
+       const btn = document.getElementById('claimBtn');
+       btn.disabled = true; // Prevent double click
+       
+       try {
+         // await state.contract.claimMiningRewards();
+         
+         const now = Date.now()/1000;
+         if (state.lastClaimTime === 0) {
+            // Start Mining
+            state.lastClaimTime = now;
+            alert("Mining Started! Please wait 6 hours.");
+         } else {
+            // Claim Logic
+            const elapsed = Math.min(now - state.lastClaimTime, MAX_SESSION);
+            const rate = BASE_RATE + (state.referrals * REF_BOOST);
+            const reward = elapsed * rate;
+            
+            state.withdrawableBalance += reward;
+            state.lastClaimTime = now; // Restart
+            alert("Claimed! Mining restarted.");
+         }
+         saveState();
+       } catch(e) { 
+           console.error(e); 
+           alert("Action failed: " + e.message); 
+           btn.disabled = false; // Re-enable if failed
+       }
+    };
+
+    document.getElementById('withdrawBtn').onclick = async () => {
+       if(!state.isConnected) return;
+       try {
+         // const wei = ethers.utils.parseEther(state.withdrawableBalance.toString());
+         // await state.contract.withdrawMining(wei);
+         alert("Withdrawal successful! Check your wallet.");
+         state.withdrawableBalance = 0;
+         saveState();
+       } catch(e) { console.error(e); alert("Withdraw failed: " + e.message); }
+    };
+
+  </script>
+</body>
+</html>
