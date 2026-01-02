@@ -5,6 +5,7 @@ interface IERC20 {
     function transfer(address recipient, uint256 amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function decimals() external view returns (uint8);
 }
 
 abstract contract ReentrancyGuard {
@@ -25,7 +26,9 @@ abstract contract ReentrancyGuard {
 }
 
 contract StellarMining is ReentrancyGuard {
-    IERC20 public stlrToken;
+    // ========== HARDCODED STLR TOKEN ADDRESS ==========
+    IERC20 public constant STLR_TOKEN = IERC20(0xDaF91D7F48E52FB79A0413Fd44b9965110664BD0);
+    
     address public owner;
 
     // DECIMAL CONFIGURATION: 8 decimals
@@ -74,6 +77,7 @@ contract StellarMining is ReentrancyGuard {
     event ApyUpdated(uint256 duration, uint256 newApy);
     event NativeReceived(address sender, uint256 amount);
     event Registered(address indexed user, string code);
+    event EmergencyTokenRecovery(address token, uint256 amount);
 
     modifier onlyEOA() {
         require(msg.sender == tx.origin, "Contracts not allowed");
@@ -85,10 +89,20 @@ contract StellarMining is ReentrancyGuard {
         _;
     }
 
-    constructor(address _stlrToken) {
-        stlrToken = IERC20(_stlrToken);
+    // ========== KONSTRUKTOR TANPA PARAMETER ==========
+    constructor() {
         owner = msg.sender;
-
+        
+        // Validasi token address
+        require(address(STLR_TOKEN) != address(0), "Token address is zero");
+        
+        // Verifikasi decimal token
+        try STLR_TOKEN.decimals() returns (uint8 tokenDecimals) {
+            require(tokenDecimals == DECIMALS, "Token decimals mismatch");
+        } catch {
+            // Skip jika token tidak implement decimals()
+        }
+        
         // APY in percentage (85% = 85)
         durationToApy[1] = 85;   // 1 Month -> 85%
         durationToApy[3] = 150;  // 3 Months -> 150%
@@ -107,13 +121,24 @@ contract StellarMining is ReentrancyGuard {
         require(success, "Transfer failed");
     }
 
+    // Emergency recovery untuk token lain (bukan STLR)
     function recoverERC20(address token, uint256 amount) external onlyOwner {
+        require(token != address(STLR_TOKEN), "Cannot recover STLR tokens");
         IERC20(token).transfer(owner, amount);
+        emit EmergencyTokenRecovery(token, amount);
     }
 
     function setApy(uint256 durationMonths, uint256 newApy) external onlyOwner {
         durationToApy[durationMonths] = newApy;
         emit ApyUpdated(durationMonths, newApy);
+    }
+
+    // Fungsi untuk update min/max stake
+    function updateStakeLimits(uint256 newMinStake, uint256 newMaxStake) external onlyOwner {
+        require(newMinStake > 0, "Min stake must be > 0");
+        require(newMaxStake > newMinStake, "Max must be greater than min");
+        minStake = newMinStake;
+        maxStake = newMaxStake;
     }
 
     // --- Mining Logic ---
@@ -172,8 +197,8 @@ contract StellarMining is ReentrancyGuard {
         // Reward Invitee (10 STLR)
         if (!miners[msg.sender].hasReceivedInviteReward) {
             miners[msg.sender].hasReceivedInviteReward = true;
-            require(stlrToken.balanceOf(address(this)) >= INVITE_REWARD, "Contract empty for reward");
-            stlrToken.transfer(msg.sender, INVITE_REWARD);
+            require(STLR_TOKEN.balanceOf(address(this)) >= INVITE_REWARD, "Contract empty for reward");
+            require(STLR_TOKEN.transfer(msg.sender, INVITE_REWARD), "Reward transfer failed");
         }
     }
 
@@ -207,10 +232,10 @@ contract StellarMining is ReentrancyGuard {
         Miner storage m = miners[msg.sender];
         require(m.balance >= amount, "Insufficient balance");
         require(amount >= MIN_WITHDRAW, "Below min withdraw");
-        require(stlrToken.balanceOf(address(this)) >= amount, "Contract empty");
+        require(STLR_TOKEN.balanceOf(address(this)) >= amount, "Contract empty");
 
         m.balance -= amount;
-        require(stlrToken.transfer(msg.sender, amount), "Transfer failed");
+        require(STLR_TOKEN.transfer(msg.sender, amount), "Transfer failed");
 
         emit WithdrawnMining(msg.sender, amount);
     }
@@ -228,6 +253,10 @@ contract StellarMining is ReentrancyGuard {
         return timeElapsed * rate;
     }
 
+    function getMiningBalance(address user) external view returns (uint256) {
+        return miners[user].balance;
+    }
+
     // --- Staking Logic (8 decimals) ---
 
     function stake(uint256 amount, uint256 durationMonths) external onlyEOA nonReentrant {
@@ -237,7 +266,7 @@ contract StellarMining is ReentrancyGuard {
 
         uint256 durationSec = durationMonths * 30 days;
 
-        require(stlrToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(STLR_TOKEN.transferFrom(msg.sender, address(this), amount), "Transfer failed");
 
         userStakes[msg.sender].push(Stake({
             amount: amount,
@@ -262,8 +291,8 @@ contract StellarMining is ReentrancyGuard {
         uint256 reward = (s.amount * s.apy * s.duration) / (100 * 365 days);
         uint256 total = s.amount + reward;
 
-        require(stlrToken.balanceOf(address(this)) >= total, "Contract empty");
-        require(stlrToken.transfer(msg.sender, total), "Transfer failed");
+        require(STLR_TOKEN.balanceOf(address(this)) >= total, "Contract empty");
+        require(STLR_TOKEN.transfer(msg.sender, total), "Transfer failed");
 
         emit Unstaked(msg.sender, s.amount, reward);
     }
@@ -283,9 +312,29 @@ contract StellarMining is ReentrancyGuard {
         uint256 referralCount,
         address referrer,
         uint256 balance,
-        bool hasReceivedInviteReward
+        bool hasReceivedInviteReward,
+        string memory referralCode
     ) {
         Miner memory m = miners[user];
-        return (m.lastClaimTime, m.referralCount, m.referrer, m.balance, m.hasReceivedInviteReward);
+        return (
+            m.lastClaimTime,
+            m.referralCount,
+            m.referrer,
+            m.balance,
+            m.hasReceivedInviteReward,
+            userToReferralCode[user]
+        );
+    }
+    
+    function getContractTokenBalance() external view returns (uint256) {
+        return STLR_TOKEN.balanceOf(address(this));
+    }
+    
+    function getTokenAddress() external pure returns (address) {
+        return address(STLR_TOKEN);
+    }
+    
+    function getTokenDecimals() external pure returns (uint256) {
+        return DECIMALS;
     }
 }
