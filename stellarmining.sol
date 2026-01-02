@@ -26,22 +26,20 @@ abstract contract ReentrancyGuard {
 }
 
 contract StellarMining is ReentrancyGuard {
-    // ========== HARDCODED STLR TOKEN ADDRESS ==========
     IERC20 public constant STLR_TOKEN = IERC20(0xDaF91D7F48E52FB79A0413Fd44b9965110664BD0);
     
     address public owner;
 
-    // DECIMAL CONFIGURATION: 8 decimals
     uint256 public constant DECIMALS = 8;
     uint256 public constant DECIMAL_FACTOR = 10**DECIMALS;
-    
-    // Mining Config (adjusted for 8 decimals)
-    uint256 public constant BASE_RATE = 100000; // 0.0001 STLR (8 decimals) per second
+
+    // Mining Config
+    uint256 public constant BASE_RATE = 100000; // 0.0001 STLR per second (8 decimals)
     uint256 public constant REFERRAL_BOOST = 50000; // 0.00005 STLR per second
     uint256 public constant MAX_REFERRALS = 50;
-    uint256 public constant MAX_SESSION = 6 hours; 
-    uint256 public constant MIN_WITHDRAW = 100 * DECIMAL_FACTOR; // 100 STLR (8 decimals)
-    uint256 public constant INVITE_REWARD = 10 * DECIMAL_FACTOR; // 10 STLR for new invitee
+    uint256 public constant MAX_SESSION = 6 hours;
+    uint256 public constant MIN_WITHDRAW = 100 * DECIMAL_FACTOR; // 100 STLR
+    uint256 public constant INVITE_REWARD = 10 * DECIMAL_FACTOR; // 10 STLR bonus
 
     uint256 public totalUsers;
 
@@ -56,7 +54,7 @@ contract StellarMining is ReentrancyGuard {
     mapping(string => address) public referralCodes;
     mapping(address => string) public userToReferralCode;
 
-    // Staking Config (8 decimals)
+    // Staking Config
     struct Stake {
         uint256 amount;
         uint256 startTime;
@@ -67,17 +65,16 @@ contract StellarMining is ReentrancyGuard {
     mapping(address => Stake[]) public userStakes;
     mapping(uint256 => uint256) public durationToApy;
 
-    uint256 public minStake = 10 * DECIMAL_FACTOR; // 10 STLR
-    uint256 public maxStake = 1000 * DECIMAL_FACTOR; // 1000 STLR
+    uint256 public minStake = 10 * DECIMAL_FACTOR;
+    uint256 public maxStake = 1000 * DECIMAL_FACTOR;
 
     event Mined(address indexed user, uint256 amount);
     event WithdrawnMining(address indexed user, uint256 amount);
     event Staked(address indexed user, uint256 amount, uint256 duration);
     event Unstaked(address indexed user, uint256 amount, uint256 reward);
     event ApyUpdated(uint256 duration, uint256 newApy);
-    event NativeReceived(address sender, uint256 amount);
+    event ReferrerSet(address indexed user, address indexed referrer, uint256 bonusAmount);
     event Registered(address indexed user, string code);
-    event EmergencyTokenRecovery(address token, uint256 amount);
 
     modifier onlyEOA() {
         require(msg.sender == tx.origin, "Contracts not allowed");
@@ -89,29 +86,18 @@ contract StellarMining is ReentrancyGuard {
         _;
     }
 
-    // ========== KONSTRUKTOR TANPA PARAMETER ==========
     constructor() {
         owner = msg.sender;
-        
-        // Validasi token address
         require(address(STLR_TOKEN) != address(0), "Token address is zero");
-        
-        // Verifikasi decimal token
-        try STLR_TOKEN.decimals() returns (uint8 tokenDecimals) {
-            require(tokenDecimals == DECIMALS, "Token decimals mismatch");
-        } catch {
-            // Skip jika token tidak implement decimals()
-        }
-        
-        // APY in percentage (85% = 85)
-        durationToApy[1] = 85;   // 1 Month -> 85%
-        durationToApy[3] = 150;  // 3 Months -> 150%
-        durationToApy[6] = 250;  // 6 Months -> 250%
-        durationToApy[12] = 600; // 12 Months -> 600%
+
+        durationToApy[1] = 85;
+        durationToApy[3] = 150;
+        durationToApy[6] = 250;
+        durationToApy[12] = 600;
     }
 
     receive() external payable {
-        emit NativeReceived(msg.sender, msg.value);
+        // Accept native coins
     }
 
     function withdrawNative() external onlyOwner {
@@ -121,53 +107,37 @@ contract StellarMining is ReentrancyGuard {
         require(success, "Transfer failed");
     }
 
-    // Emergency recovery untuk token lain (bukan STLR)
-    function recoverERC20(address token, uint256 amount) external onlyOwner {
-        require(token != address(STLR_TOKEN), "Cannot recover STLR tokens");
-        IERC20(token).transfer(owner, amount);
-        emit EmergencyTokenRecovery(token, amount);
-    }
+    // PERBAIKAN: Bonus langsung ke mining balance, bukan ke wallet
+    function setReferrer(string memory code) external onlyEOA nonReentrant {
+        address ref = referralCodes[code];
+        require(ref != address(0) && ref != msg.sender, "Invalid referrer");
+        require(miners[msg.sender].referrer == address(0), "Already has referrer");
 
-    function setApy(uint256 durationMonths, uint256 newApy) external onlyOwner {
-        durationToApy[durationMonths] = newApy;
-        emit ApyUpdated(durationMonths, newApy);
-    }
+        miners[msg.sender].referrer = ref;
 
-    // Fungsi untuk update min/max stake
-    function updateStakeLimits(uint256 newMinStake, uint256 newMaxStake) external onlyOwner {
-        require(newMinStake > 0, "Min stake must be > 0");
-        require(newMaxStake > newMinStake, "Max must be greater than min");
-        minStake = newMinStake;
-        maxStake = newMaxStake;
-    }
-
-    // --- Mining Logic ---
-
-    function _toString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) {
-            return "0";
+        // Boost referrer
+        if (miners[ref].referralCount < MAX_REFERRALS) {
+            miners[ref].referralCount++;
         }
-        uint256 temp = value;
-        uint256 digits;
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
+
+        // PERBAIKAN: Tambah bonus ke mining balance, bukan transfer ke wallet
+        if (!miners[msg.sender].hasReceivedInviteReward) {
+            miners[msg.sender].hasReceivedInviteReward = true;
+            
+            // Tambahkan bonus ke balance mining user
+            miners[msg.sender].balance += INVITE_REWARD;
+            
+            // Log event tanpa transfer langsung
+            emit ReferrerSet(msg.sender, ref, INVITE_REWARD);
         }
-        bytes memory buffer = new bytes(digits);
-        while (value != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
-            value /= 10;
-        }
-        return string(buffer);
     }
 
     function autoRegister() external onlyEOA nonReentrant {
         require(bytes(userToReferralCode[msg.sender]).length == 0, "Already registered");
 
         totalUsers++;
-        
-        // Generate referral code: STLR + number (padded with 0 if < 10)
+
+        // Generate referral code: STLR + number
         string memory suffix = _toString(totalUsers);
         string memory code;
         if (totalUsers < 10) {
@@ -182,46 +152,22 @@ contract StellarMining is ReentrancyGuard {
         emit Registered(msg.sender, code);
     }
 
-    function setReferrer(string memory code) external onlyEOA nonReentrant {
-        address ref = referralCodes[code];
-        require(ref != address(0) && ref != msg.sender, "Invalid referrer");
-        require(miners[msg.sender].referrer == address(0), "Already has referrer");
-
-        miners[msg.sender].referrer = ref;
-
-        // Boost referrer
-        if (miners[ref].referralCount < MAX_REFERRALS) {
-            miners[ref].referralCount++;
-        }
-
-        // Reward Invitee (10 STLR)
-        if (!miners[msg.sender].hasReceivedInviteReward) {
-            miners[msg.sender].hasReceivedInviteReward = true;
-            require(STLR_TOKEN.balanceOf(address(this)) >= INVITE_REWARD, "Contract empty for reward");
-            require(STLR_TOKEN.transfer(msg.sender, INVITE_REWARD), "Reward transfer failed");
-        }
-    }
-
     function claimMiningRewards() external onlyEOA nonReentrant {
         Miner storage m = miners[msg.sender];
         uint256 currentTime = block.timestamp;
 
-        // Start mining if not started
         if (m.lastClaimTime == 0) {
             m.lastClaimTime = currentTime;
             return;
         }
 
-        // Check if 6 hours have passed
         uint256 timeElapsed = currentTime - m.lastClaimTime;
         require(timeElapsed >= MAX_SESSION, "Mining in progress");
 
-        // Calculate reward for 6 hours
         uint256 effectiveTime = MAX_SESSION;
         uint256 rate = BASE_RATE + (m.referralCount * REFERRAL_BOOST);
         uint256 reward = effectiveTime * rate;
 
-        // Add to balance (8 decimals)
         m.balance += reward;
         m.lastClaimTime = currentTime;
 
@@ -257,8 +203,7 @@ contract StellarMining is ReentrancyGuard {
         return miners[user].balance;
     }
 
-    // --- Staking Logic (8 decimals) ---
-
+    // Staking functions...
     function stake(uint256 amount, uint256 durationMonths) external onlyEOA nonReentrant {
         require(amount >= minStake && amount <= maxStake, "Invalid amount");
         uint256 apy = durationToApy[durationMonths];
@@ -287,7 +232,6 @@ contract StellarMining is ReentrancyGuard {
 
         s.withdrawn = true;
 
-        // Calculate reward with 8 decimal precision
         uint256 reward = (s.amount * s.apy * s.duration) / (100 * 365 days);
         uint256 total = s.amount + reward;
 
@@ -297,16 +241,28 @@ contract StellarMining is ReentrancyGuard {
         emit Unstaked(msg.sender, s.amount, reward);
     }
 
-    // --- Utility Functions ---
-    
+    // Utility functions...
+    function _toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
+    }
+
     function getUserStakes(address user) external view returns (Stake[] memory) {
         return userStakes[user];
     }
-    
-    function getStakeCount(address user) external view returns (uint256) {
-        return userStakes[user].length;
-    }
-    
+
     function getMinerInfo(address user) external view returns (
         uint256 lastClaimTime,
         uint256 referralCount,
@@ -325,15 +281,15 @@ contract StellarMining is ReentrancyGuard {
             userToReferralCode[user]
         );
     }
-    
+
     function getContractTokenBalance() external view returns (uint256) {
         return STLR_TOKEN.balanceOf(address(this));
     }
-    
+
     function getTokenAddress() external pure returns (address) {
         return address(STLR_TOKEN);
     }
-    
+
     function getTokenDecimals() external pure returns (uint256) {
         return DECIMALS;
     }
